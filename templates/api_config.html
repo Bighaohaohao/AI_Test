@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API密钥配置管理</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .card { box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); }
+        .api-key-display { font-family: monospace; letter-spacing: 2px; }
+        .model-card { transition: transform 0.2s; }
+        .model-card:hover { transform: translateY(-2px); }
+        .key-status { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
+        .key-configured { background-color: #28a745; }
+        .key-missing { background-color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="mb-0"><i class="fas fa-key me-2"></i>API密钥配置管理</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            在这里配置各AI模型的API密钥，配置后无需每次手动输入。密钥将被加密存储以确保安全。
+                        </div>
+                        
+                        <div id="modelsContainer" class="row g-4">
+                            <!-- 模型配置卡片将在这里动态生成 -->
+                        </div>
+                        
+                        <div class="text-center mt-4">
+                            <button id="refreshBtn" class="btn btn-outline-primary">
+                                <i class="fas fa-sync-alt me-1"></i>刷新状态
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 配置模态框 -->
+    <div class="modal fade" id="configModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="configModalTitle">配置API密钥</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="keyConfigForm">
+                        <input type="hidden" id="modelNameInput">
+                        <div class="mb-3">
+                            <label class="form-label">模型名称：</label>
+                            <div class="form-control-plaintext" id="modelNameDisplay"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="apiKeyInput" class="form-label">API密钥：</label>
+                            <input type="password" class="form-control" id="apiKeyInput" placeholder="请输入API密钥" required>
+                            <div class="form-text" id="apiKeyHelp"></div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="saveKeyBtn">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let supportedModels = {};
+        let currentKeysStatus = {};
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', async function() {
+            await loadSupportedModels();
+            await loadKeysStatus();
+            setupEventListeners();
+        });
+
+        async function loadSupportedModels() {
+            try {
+                const response = await fetch('http://localhost:8000/api/config/models');
+                supportedModels = await response.json();
+            } catch (error) {
+                console.error('加载支持的模型失败:', error);
+            }
+        }
+
+        async function loadKeysStatus() {
+            try {
+                const response = await fetch('http://localhost:8000/api/config/api-keys');
+                currentKeysStatus = await response.json();
+                renderModelCards();
+            } catch (error) {
+                console.error('加载密钥状态失败:', error);
+            }
+        }
+
+        function renderModelCards() {
+            const container = document.getElementById('modelsContainer');
+            container.innerHTML = '';
+
+            Object.keys(supportedModels).forEach(modelName => {
+                const modelInfo = supportedModels[modelName];
+                const keyStatus = currentKeysStatus[modelName] || { has_key: false, masked_key: '' };
+                
+                const card = document.createElement('div');
+                card.className = 'col-md-6';
+                card.innerHTML = `
+                    <div class="card model-card h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <h5 class="card-title mb-0">${modelInfo}</h5>
+                                <span class="key-status ${keyStatus.has_key ? 'key-configured' : 'key-missing'}"></span>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <small class="text-muted">状态：</small>
+                                <span class="badge ${keyStatus.has_key ? 'bg-success' : 'bg-warning'}">
+                                    ${keyStatus.has_key ? '已配置' : '未配置'}
+                                </span>
+                            </div>
+                            
+                            ${keyStatus.has_key ? `
+                                <div class="mb-3">
+                                    <small class="text-muted">当前密钥：</small>
+                                    <div class="api-key-display text-muted">${keyStatus.masked_key}</div>
+                                </div>
+                            ` : ''}
+                            
+                            <div class="d-grid gap-2">
+                                ${keyStatus.has_key ? `
+                                    <button class="btn btn-sm btn-outline-primary edit-key-btn" data-model="${modelName}">
+                                        <i class="fas fa-edit me-1"></i>修改密钥
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger remove-key-btn" data-model="${modelName}">
+                                        <i class="fas fa-trash me-1"></i>移除密钥
+                                    </button>
+                                ` : `
+                                    <button class="btn btn-sm btn-primary config-key-btn" data-model="${modelName}">
+                                        <i class="fas fa-plus me-1"></i>配置密钥
+                                    </button>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(card);
+            });
+
+            // 绑定按钮事件
+            document.querySelectorAll('.config-key-btn').forEach(btn => {
+                btn.addEventListener('click', () => openConfigModal(btn.dataset.model));
+            });
+            
+            document.querySelectorAll('.edit-key-btn').forEach(btn => {
+                btn.addEventListener('click', () => openConfigModal(btn.dataset.model, true));
+            });
+            
+            document.querySelectorAll('.remove-key-btn').forEach(btn => {
+                btn.addEventListener('click', () => removeApiKey(btn.dataset.model));
+            });
+        }
+
+        function openConfigModal(modelName, isEdit = false) {
+            const modelInfo = supportedModels[modelName];
+            document.getElementById('modelNameInput').value = modelName;
+            document.getElementById('modelNameDisplay').textContent = modelInfo;
+            document.getElementById('configModalTitle').textContent = isEdit ? '修改API密钥' : '配置API密钥';
+            
+            // 设置帮助文本
+            let helpText = '';
+            switch(modelName) {
+                case 'openai':
+                    helpText = 'OpenAI API密钥，格式通常为 sk- 开头';
+                    break;
+                case 'qwen':
+                    helpText = '通义千问API密钥，可在阿里云控制台获取';
+                    break;
+                default:
+                    helpText = '请输入相应的API密钥';
+            }
+            document.getElementById('apiKeyHelp').textContent = helpText;
+            
+            // 清空输入框
+            document.getElementById('apiKeyInput').value = '';
+            
+            const modal = new bootstrap.Modal(document.getElementById('configModal'));
+            modal.show();
+        }
+
+        async function saveApiKey() {
+            const modelName = document.getElementById('modelNameInput').value;
+            const apiKey = document.getElementById('apiKeyInput').value.trim();
+            
+            if (!apiKey) {
+                alert('请输入API密钥');
+                return;
+            }
+            
+            try {
+                const formData = new FormData();
+                formData.append('api_key', apiKey);
+                
+                const response = await fetch(`http://localhost:8000/api/config/api-keys/${modelName}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(result.message);
+                    bootstrap.Modal.getInstance(document.getElementById('configModal')).hide();
+                    await loadKeysStatus(); // 刷新状态
+                } else {
+                    alert('配置失败：' + result.error);
+                }
+            } catch (error) {
+                alert('配置过程中出现错误：' + error.message);
+            }
+        }
+
+        async function removeApiKey(modelName) {
+            if (!confirm('确定要移除这个API密钥吗？')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`http://localhost:8000/api/config/api-keys/${modelName}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(result.message);
+                    await loadKeysStatus(); // 刷新状态
+                } else {
+                    alert('移除失败：' + result.error);
+                }
+            } catch (error) {
+                alert('移除过程中出现错误：' + error.message);
+            }
+        }
+
+        function setupEventListeners() {
+            document.getElementById('saveKeyBtn').addEventListener('click', saveApiKey);
+            document.getElementById('refreshBtn').addEventListener('click', loadKeysStatus);
+            
+            // 回车键提交表单
+            document.getElementById('apiKeyInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    saveApiKey();
+                }
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI测试用例生成工具 - 修复版</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { 
+            background-color: #f8f9fa; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 0.875rem;
+        }
+        .card { 
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); 
+            border: 1px solid rgba(0, 0, 0, 0.125);
+        }
+        .btn-primary { 
+            background-color: #007bff; 
+            border-color: #007bff; 
+            font-size: 0.875rem;
+        }
+        .btn-success { 
+            font-size: 0.875rem;
+        }
+        .form-label {
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+        .form-control, .form-select {
+            font-size: 0.875rem;
+        }
+        .custom-step-indicator { 
+            display: flex; 
+            justify-content: space-between; 
+            margin-bottom: 30px; 
+        }
+        .custom-step { 
+            flex: 1; 
+            text-align: center; 
+            padding: 12px; 
+            border-radius: 8px; 
+            background: #e9ecef; 
+            margin: 0 8px; 
+            font-size: 0.875rem;
+            transition: all 0.3s ease;
+        }
+        .custom-step-active { 
+            background: #007bff; 
+            color: white; 
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+        }
+        .custom-step-completed { 
+            background: #28a745; 
+            color: white; 
+        }
+        h3, h4, h5 {
+            font-weight: 600;
+        }
+        h3 {
+            font-size: 1.5rem;
+        }
+        h4 {
+            font-size: 1.25rem;
+        }
+        h5 {
+            font-size: 1.1rem;
+        }
+        .loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+        .spinner { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        
+        /* Tab高亮样式修复 - 选中时显示蓝色背景 */
+        .nav-tabs .nav-link {
+            border: 1px solid #dee2e6;
+            border-bottom: none;
+            background-color: #f8f9fa;
+            color: #495057;
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .nav-tabs .nav-link:hover {
+            background-color: #e9ecef;
+            border-color: #e9ecef #e9ecef #dee2e6;
+        }
+        
+        .nav-tabs .nav-link.active,
+        .nav-tabs .nav-item.show .nav-link {
+            color: white !important;
+            background-color: #007bff !important;
+            border-color: #007bff #007bff #fff !important;
+            font-weight: 500;
+        }
+        
+        .nav-tabs .nav-link:focus {
+            border-color: #007bff #007bff #fff;
+            outline: 0;
+            box-shadow: 0 0 0 0.25rem rgba(0, 123, 255, 0.25);
+        }
+        
+        /* 需求预览增强样式 */
+        .preview-content {
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .preview-content:hover {
+            background-color: rgba(0, 123, 255, 0.05);
+        }
+        
+        .popover {
+            background-color: #fff;
+            border: 1px solid rgba(0, 0, 0, 0.2);
+            border-radius: 0.3rem;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        }
+        
+        .popover-header {
+            background-color: #f7f7f7;
+            border-bottom: 1px solid #ebebeb;
+            border-top-left-radius: calc(0.3rem - 1px);
+            border-top-right-radius: calc(0.3rem - 1px);
+            font-size: 1rem;
+            margin-bottom: 0;
+            padding: 0.5rem 1rem;
+        }
+        
+        .popover-body {
+            padding: 1rem;
+            word-wrap: break-word;
+        }
+        
+        .preview-hint {
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .preview-content:hover + .preview-hint,
+        .preview-hint:hover {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h3 class="mb-0"><i class="fas fa-robot me-2"></i>AI测试用例生成工具</h3>
+                            <a href="/api_config.html" class="btn btn-sm btn-light">
+                                <i class="fas fa-key me-1"></i>API密钥管理
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- 步骤指示器 -->
+                        <div class="custom-step-indicator">
+                            <div id="step1" class="custom-step custom-step-active">
+                                <i class="fas fa-file-upload"></i>
+                                <div>步骤1：输入需求</div>
+                            </div>
+                            <div id="step2" class="custom-step">
+                                <i class="fas fa-cogs"></i>
+                                <div>步骤2：生成用例</div>
+                            </div>
+                            <div id="step3" class="custom-step">
+                                <i class="fas fa-download"></i>
+                                <div>步骤3：导出结果</div>
+                            </div>
+                        </div>
+
+                        <!-- 第一步：输入需求 -->
+                        <div id="inputSection">
+                            <h4 class="mb-4">步骤1：输入测试需求</h4>
+                            
+                            <!-- 模型选择 -->
+                            <div class="mb-4">
+                                <label class="form-label">选择AI模型：</label>
+                                <select id="modelSelect" class="form-select">
+                                    <option value="qwen" selected>通义千问 (免费)</option>
+                                    <option value="example">示例数据 (完全免费)</option>
+                                    <option value="openai">OpenAI (需API密钥)</option>
+                                </select>
+                                <div class="form-text">示例数据无需配置，可直接体验功能</div>
+                            </div>
+
+                            <!-- 输入方式选择 -->
+                            <ul class="nav nav-tabs mb-4" id="inputTab" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="file-tab" data-bs-toggle="tab" data-bs-target="#file" type="button" role="tab">
+                                        <i class="fas fa-file me-1"></i>上传文件
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="text-tab" data-bs-toggle="tab" data-bs-target="#text" type="button" role="tab">
+                                        <i class="fas fa-keyboard me-1"></i>直接输入
+                                    </button>
+                                </li>
+                            </ul>
+
+                            <div class="tab-content" id="inputTabContent">
+                                <!-- 文件上传 -->
+                                <div class="tab-pane fade show active" id="file" role="tabpanel">
+                                    <form id="uploadForm">
+                                        <div class="mb-3">
+                                            <label class="form-label">上传需求文档：</label>
+                                            <input type="file" class="form-control" id="requirementFile" accept=".txt,.doc,.docx,.pdf">
+                                            <div class="form-text">支持TXT、DOC、DOCX、PDF格式</div>
+                                        </div>
+                                        
+                                        <button type="submit" class="btn btn-primary mb-3">
+                                            <i class="fas fa-upload me-1"></i>上传并处理
+                                        </button>
+                                    </form>
+                                    
+                                    <!-- 文件上传模式下的参数控制 -->
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">正常用例数量：</label>
+                                            <input type="number" class="form-control" id="normalCaseCountFile" min="1" max="25" value="3" placeholder="请输入正常用例数量">
+                                            <div class="form-text">建议范围：1-25个（单次最高限制25）</div>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">异常用例数量：</label>
+                                            <input type="number" class="form-control" id="abnormalCaseCountFile" min="0" max="25" value="2" placeholder="请输入异常用例数量">
+                                            <div class="form-text">建议范围：0-25个（单次最高限制25）</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">测试类型（可多选）：</label>
+                                        <div class="d-flex gap-4">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="functionalTestFile" value="功能测试" checked>
+                                                <label class="form-check-label" for="functionalTestFile">功能测试</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="interfaceTestFile" value="接口测试">
+                                                <label class="form-check-label" for="interfaceTestFile">接口测试</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="performanceTestFile" value="性能测试">
+                                                <label class="form-check-label" for="performanceTestFile">性能测试</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 文本输入 -->
+                                <div class="tab-pane fade" id="text" role="tabpanel">
+                                    <form id="textInputForm">
+                                        <div class="mb-3">
+                                            <label class="form-label">直接输入需求：</label>
+                                            <textarea class="form-control" id="requirementText" rows="6" placeholder="请在此输入您的测试需求..."></textarea>
+                                        </div>
+                                        
+                                        <!-- 参数配置 -->
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label class="form-label">正常用例数量：</label>
+                                                <input type="number" class="form-control" id="normalCaseCountDirect" min="1" max="25" value="3" placeholder="请输入正常用例数量">
+                                                <div class="form-text">建议范围：1-25个（单次最高限制25）</div>
+                                            </div>
+                                            <div class="col-md-6 mb-3">
+                                                <label class="form-label">异常用例数量：</label>
+                                                <input type="number" class="form-control" id="abnormalCaseCountDirect" min="0" max="25" value="2" placeholder="请输入异常用例数量">
+                                                <div class="form-text">建议范围：0-25个（单次最高限制25）</div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">测试类型（可多选）：</label>
+                                            <div class="d-flex gap-4">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" name="testTypesDirect" id="functionalTestDirect" value="功能测试" checked>
+                                                    <label class="form-check-label" for="functionalTestDirect">功能测试</label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" name="testTypesDirect" id="interfaceTestDirect" value="接口测试">
+                                                    <label class="form-check-label" for="interfaceTestDirect">接口测试</label>
+                                                </div>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" name="testTypesDirect" id="performanceTestDirect" value="性能测试">
+                                                    <label class="form-check-label" for="performanceTestDirect">性能测试</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <button type="submit" class="btn btn-primary mb-3">
+                                            <i class="fas fa-check me-1"></i>确认输入
+                                        </button>
+                                    </form>
+                                    
+                                    <!-- 直接输入模式下的预览区域 -->
+                                    <div id="previewSectionDirect" class="mt-3 border-top pt-3" style="display: none;">
+                                        <h6 class="mb-2"><i class="fas fa-eye me-1"></i>需求预览</h6>
+                                        <div class="alert alert-info position-relative py-2">
+                                            <div id="requirementPreviewDirect" class="preview-content" style="max-height: 150px; overflow-y: auto;"></div>
+                                            <div id="fullContentPopoverDirect" class="popover bs-popover-bottom" style="display: none; position: absolute; z-index: 1000; max-width: 500px;">
+                                                <div class="popover-arrow" style="position: absolute; top: calc(-0.5rem - 1px); left: 50%; margin-left: -0.5rem; border-width: 0.5rem 0.5rem 0; border-top-color: rgba(0, 0, 0, 0.25);"></div>
+                                                <div class="popover-arrow" style="position: absolute; top: -0.5rem; left: 50%; margin-left: -0.5rem; border-width: 0.5rem 0.5rem 0; border-top-color: #fff;"></div>
+                                                <h3 class="popover-header">完整需求内容</h3>
+                                                <div class="popover-body" id="fullContentBodyDirect" style="max-height: 300px; overflow-y: auto; white-space: pre-wrap;"></div>
+                                            </div>
+                                        </div>
+                                        <div class="mt-1 text-muted small">
+                                            <i class="fas fa-info-circle me-1"></i>鼠标悬停可查看完整内容
+                                        </div>
+                                        <button id="proceedToGenerateDirect" class="btn btn-success mt-2">
+                                            <i class="fas fa-arrow-right me-1"></i>继续生成测试用例
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            </div>
+                        </div>
+
+                        <!-- 预览区域 -->
+                        <div id="previewSection" class="mt-4 border-top pt-4" style="display: none;">
+                            <h5 class="mb-3"><i class="fas fa-eye me-2"></i>需求预览</h5>
+                            <div class="alert alert-info position-relative">
+                                <div id="requirementPreview" class="preview-content" style="max-height: 200px; overflow-y: auto;"></div>
+                                <!-- 悬浮显示完整内容的popover -->
+                                <div id="fullContentPopover" class="popover bs-popover-bottom" style="display: none; position: absolute; z-index: 1000; max-width: 500px;">
+                                    <div class="popover-arrow" style="position: absolute; top: calc(-0.5rem - 1px); left: 50%; margin-left: -0.5rem; border-width: 0.5rem 0.5rem 0; border-top-color: rgba(0, 0, 0, 0.25);"></div>
+                                    <div class="popover-arrow" style="position: absolute; top: -0.5rem; left: 50%; margin-left: -0.5rem; border-width: 0.5rem 0.5rem 0; border-top-color: #fff;"></div>
+                                    <h3 class="popover-header">完整需求内容</h3>
+                                    <div class="popover-body" id="fullContentBody" style="max-height: 300px; overflow-y: auto; white-space: pre-wrap;"></div>
+                                </div>
+                            </div>
+                            <div class="mt-2 text-muted small">
+                                <i class="fas fa-info-circle me-1"></i>鼠标悬停可查看完整内容
+                            </div>
+                            <button id="proceedToGenerate" class="btn btn-success mt-3">
+                                <i class="fas fa-arrow-right me-1"></i>继续生成测试用例
+                            </button>
+                        </div>
+
+                        <!-- 第二步：生成测试用例 -->
+                        <div id="generateSection" style="display: none;">
+                            <h4 class="mb-4">步骤2：生成测试用例</h4>
+                            
+                            <!-- 显示原始需求摘要 -->
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h5 class="mb-0"><i class="fas fa-file-alt me-2"></i>需求摘要</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="requirementSummary" class="text-muted" style="max-height: 100px; overflow-y: auto;"></div>
+                                </div>
+                            </div>
+                            
+                            <form id="generateForm">
+                                <div class="mb-3">
+                                    <label class="form-label">AI模型：</label>
+                                    <select id="modelSelectSecond" class="form-select" disabled>
+                                        <option value="example">示例数据</option>
+                                        <option value="qwen">通义千问</option>
+                                        <option value="openai">OpenAI</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- 参数设置区域 -->
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">正常用例数量：</label>
+                                        <input type="number" class="form-control" id="normalCaseCount" min="1" max="25" value="3" placeholder="请输入正常用例数量">
+                                        <div class="form-text">建议范围：1-25个（单次最高限制25）</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">异常用例数量：</label>
+                                        <input type="number" class="form-control" id="abnormalCaseCount" min="0" max="25" value="2" placeholder="请输入异常用例数量">
+                                        <div class="form-text">建议范围：0-25个（单次最高限制25）</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">测试类型（可多选）：</label>
+                                    <div class="d-flex gap-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="testTypes" id="functionalTestGen" value="功能测试" checked>
+                                            <label class="form-check-label" for="functionalTestGen">功能测试</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="testTypes" id="interfaceTestGen" value="接口测试">
+                                            <label class="form-check-label" for="interfaceTestGen">接口测试</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="testTypes" id="performanceTestGen" value="性能测试">
+                                            <label class="form-check-label" for="performanceTestGen">性能测试</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3" id="apiKeyContainer" style="display: none;">
+                                    <label class="form-label">API密钥：</label>
+                                    <div class="input-group">
+                                        <input type="password" class="form-control" id="apiKey" placeholder="请输入API密钥">
+                                        <button class="btn btn-outline-secondary" type="button" id="toggleApiKeyVisibility">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-text" id="apiKeyHelpText"></div>
+                                    <div class="mt-2" id="apiKeyStatus" style="display: none;">
+                                        <span class="badge bg-success">已配置密钥</span>
+                                        <span class="text-muted ms-2" id="maskedApiKey"></span>
+                                    </div>
+                                </div>
+                                
+                                <button type="submit" id="generateBtn" class="btn btn-primary">
+                                    <i class="fas fa-cogs me-1"></i>生成测试用例
+                                </button>
+                                <button type="button" id="cancelBtn" class="btn btn-secondary ms-2" style="display: none;">
+                                    <i class="fas fa-times me-1"></i>取消
+                                </button>
+                            </form>
+                            
+                            <!-- 加载动画 -->
+                            <div id="generateLoading" class="text-center mt-4" style="display: none;">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">处理中...</span>
+                                </div>
+                                <p class="mt-2">正在生成测试用例，请稍候...</p>
+                            </div>
+                        </div>
+
+                        <!-- 第三步：结果显示 -->
+                        <div id="resultSection" style="display: none;">
+                            <h4 class="mb-4">步骤3：测试用例结果</h4>
+                            
+                            <div class="d-flex justify-content-between align-items-center mb-4 p-3 bg-light rounded">
+                                <div>
+                                    <h5 class="mb-1"><i class="fas fa-list-check me-2"></i>测试用例概览</h5>
+                                    <small class="text-muted">共 <span id="testCaseCount">0</span> 条测试用例</small>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button id="exportBtn" class="btn btn-success btn-sm">
+                                        <i class="fas fa-file-excel me-1"></i>导出Excel
+                                    </button>
+                                    <button id="viewDetailsBtn" class="btn btn-info btn-sm">
+                                        <i class="fas fa-eye me-1"></i>查看详情
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="card">
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-hover mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th class="text-center" style="width: 80px;">模块</th>
+                                                    <th class="text-center" style="width: 100px;">用例编号</th>
+                                                    <th style="width: 200px;">用例名称</th>
+                                                    <th class="text-center" style="width: 100px;">测试类型</th>
+                                                    <th class="text-center" style="width: 80px;">优先级</th>
+                                                    <th style="width: 250px;">操作步骤</th>
+                                                    <th>预期结果</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="testCaseBody" class="small">
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="text-center mt-4">
+                                <button id="restartBtn" class="btn btn-secondary">
+                                    <i class="fas fa-redo me-1"></i>重新开始
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载遮罩 -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner">
+            <div class="spinner-border text-light" style="width: 3rem; height: 3rem;" role="status">
+                <span class="visually-hidden">加载中...</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        console.log('=== 新版本脚本开始执行 ===');
+        
+        let currentRequirementText = '';
+        let generatedTestCases = [];
+        let currentRequestController = null;
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('=== DOMContentLoaded事件触发 ===');
+            
+            // 初始化模型选择事件
+            document.getElementById('modelSelect').addEventListener('change', function() {
+                const model = this.value;
+                const apiKeyContainer = document.getElementById('apiKeyContainer');
+                
+                switch(model) {
+                    case 'openai':
+                        apiKeyContainer.style.display = 'block';
+                        document.getElementById('apiKey').placeholder = '请输入您的OpenAI API密钥';
+                        document.getElementById('apiKeyHelpText').textContent = 'OpenAI模型需要有效的API密钥才能使用';
+                        break;
+                    case 'qwen':
+                        apiKeyContainer.style.display = 'block';
+                        document.getElementById('apiKey').placeholder = '通义千问API密钥（可选）';
+                        document.getElementById('apiKeyHelpText').textContent = '通义千问免费使用，可选填写API密钥获得更好效果';
+                        break;
+                    case 'example':
+                        apiKeyContainer.style.display = 'none';
+                        document.getElementById('apiKey').value = '';
+                        break;
+                }
+            });
+
+            // 触发初始模型选择
+            document.getElementById('modelSelect').dispatchEvent(new Event('change'));
+
+            // 检查并显示已配置的API密钥状态
+            checkApiKeyStatus();
+            
+            // Tab切换时隐藏非当前tab的预览区域
+            document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(tab => {
+                tab.addEventListener('shown.bs.tab', function(e) {
+                    const targetId = e.target.getAttribute('data-bs-target');
+                    // 隐藏所有预览区域
+                    document.getElementById('previewSection').style.display = 'none';
+                    document.getElementById('previewSectionDirect').style.display = 'none';
+                    
+                    // 如果当前有需求文本，显示对应tab的预览
+                    if (currentRequirementText) {
+                        if (targetId === '#text') {
+                            document.getElementById('previewSectionDirect').style.display = 'block';
+                        } else {
+                            document.getElementById('previewSection').style.display = 'block';
+                        }
+                    }
+                });
+            });
+
+            // 文件上传处理
+            document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                console.log('=== 文件上传表单提交 ===');
+                
+                const fileInput = document.getElementById('requirementFile');
+                if (!fileInput.files.length) {
+                    alert('请选择要上传的文件');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+                
+                // 添加文件上传模式下的参数
+                const normalCaseCountFile = document.getElementById('normalCaseCountFile').value || 3;
+                const abnormalCaseCountFile = document.getElementById('abnormalCaseCountFile').value || 2;
+                
+                // 获取选中的测试类型（文件上传模式）
+                const selectedTestTypesFile = [];
+                if (document.getElementById('functionalTestFile').checked) {
+                    selectedTestTypesFile.push('功能测试');
+                }
+                if (document.getElementById('interfaceTestFile').checked) {
+                    selectedTestTypesFile.push('接口测试');
+                }
+                if (document.getElementById('performanceTestFile').checked) {
+                    selectedTestTypesFile.push('性能测试');
+                }
+                
+                // 如果没有选中任何类型，默认选择功能测试
+                if (selectedTestTypesFile.length === 0) {
+                    selectedTestTypesFile.push('功能测试');
+                }
+                
+                formData.append('normal_case_count', normalCaseCountFile);
+                formData.append('abnormal_case_count', abnormalCaseCountFile);
+                formData.append('test_types', JSON.stringify(selectedTestTypesFile));
+                
+                console.log('文件上传参数:', {
+                    normal_case_count: normalCaseCountFile,
+                    abnormal_case_count: abnormalCaseCountFile,
+                    test_types: selectedTestTypesFile
+                });
+
+                try {
+                    showLoading();
+                    const response = await fetch('http://localhost:8000/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        currentRequirementText = result.content;
+                        showPreview(result.content);
+                    } else {
+                        alert('文件处理失败：' + result.error);
+                    }
+                } catch (error) {
+                    alert('上传过程中出现错误：' + error.message);
+                } finally {
+                    hideLoading();
+                }
+            });
+
+            // 文本输入处理
+            document.getElementById('textInputForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                console.log('=== 文本输入表单提交 ===');
+                
+                const textContent = document.getElementById('requirementText').value.trim();
+                if (!textContent) {
+                    alert('请输入测试需求内容');
+                    return;
+                }
+
+                // 收集新增参数
+                const normalCaseCount = document.getElementById('normalCaseCountDirect').value;
+                const abnormalCaseCount = document.getElementById('abnormalCaseCountDirect').value;
+                
+                // 收集测试类型（多选）
+                const testTypes = [];
+                const checkedBoxes = document.querySelectorAll('#text input[name="testTypesDirect"]:checked');
+                console.log('找到的选中测试类型数量:', checkedBoxes.length);
+                checkedBoxes.forEach(checkbox => {
+                    console.log('选中的测试类型:', checkbox.value, checkbox.id);
+                    testTypes.push(checkbox.value);
+                });
+                
+                // 验证参数
+                if (testTypes.length === 0) {
+                    console.log('警告: 没有选中的测试类型');
+                    alert('请至少选择一种测试类型');
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('requirement_text', textContent);
+                formData.append('normal_case_count', normalCaseCount);
+                formData.append('abnormal_case_count', abnormalCaseCount);
+                formData.append('test_types', JSON.stringify(testTypes));
+
+                try {
+                    showLoading();
+                    const response = await fetch('http://localhost:8000/direct_input', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        currentRequirementText = result.full_content;
+                        showPreview(result.content);
+                    } else {
+                        alert('文本处理失败：' + result.error);
+                    }
+                } catch (error) {
+                    alert('处理过程中出现错误：' + error.message);
+                } finally {
+                    hideLoading();
+                }
+            });
+
+            // 生成测试用例
+            document.getElementById('generateForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                console.log('=== 生成测试用例表单提交 ===');
+                
+                const apiKey = document.getElementById('apiKey').value;
+                const requirementText = document.getElementById('requirementText').value;
+                console.log('获取到需求文本:', requirementText);
+                
+                // 显示加载状态
+                document.getElementById('generateLoading').style.display = 'flex';
+                document.getElementById('generateBtn').disabled = true;
+                document.getElementById('cancelBtn').style.display = 'inline-block';
+
+                // 创建AbortController用于取消请求
+                currentRequestController = new AbortController();
+                const signal = currentRequestController.signal;
+
+                try {
+                    const modelType = document.getElementById('modelSelectSecond').value;
+                    console.log('发送生成请求:', { modelType, hasApiKey: !!apiKey, requirementLength: requirementText.length });
+                    
+                    const formData = new FormData();
+                    formData.append('requirement_text', requirementText || currentRequirementText);
+                    formData.append('api_key', apiKey);
+                    formData.append('model_type', modelType);
+                    
+                    // 添加新参数
+                    const normalCaseCount = document.getElementById('normalCaseCount').value || '3';
+                    const abnormalCaseCount = document.getElementById('abnormalCaseCount').value || '2';
+                    
+                    // 获取选中的测试类型
+                    const selectedTestTypes = [];
+                    document.querySelectorAll('#generateSection input[name="testTypes"]:checked').forEach(checkbox => {
+                        selectedTestTypes.push(checkbox.value);
+                    });
+                    
+                    // 如果没有选中任何类型，默认选择功能测试
+                    if (selectedTestTypes.length === 0) {
+                        selectedTestTypes.push('功能测试');
+                    }
+                    
+                    formData.append('normal_case_count', normalCaseCount);
+                    formData.append('abnormal_case_count', abnormalCaseCount);
+                    formData.append('test_types', JSON.stringify(selectedTestTypes));
+                    
+                    console.log('新参数:', {
+                        normal_case_count: normalCaseCount,
+                        abnormal_case_count: abnormalCaseCount,
+                        test_types: selectedTestTypes
+                    });
+
+                    console.log('准备发送请求，formData内容:');
+                    for (let [key, value] of formData.entries()) {
+                        console.log(key, ':', typeof value === 'string' ? value.substring(0, 100) + '...' : value);
+                    }
+                    
+                    const startTime = Date.now();
+                    const response = await fetch('http://localhost:8000/generate', {
+                        method: 'POST',
+                        body: formData,
+                        signal: signal
+                    });
+                    
+                    const endTime = Date.now();
+                    console.log('收到响应状态:', response.status, '耗时:', (endTime - startTime), 'ms');
+                    
+                    const result = await response.json();
+                    console.log('=== 收到generate响应 ===');
+                    console.log('响应数据:', result);
+                    console.log('success字段:', result.success);
+                    console.log('是否有test_cases:', !!result.test_cases);
+                    
+                    if (result.success) {
+                        console.log('准备显示测试用例，数量:', result.test_cases.length);
+                        generatedTestCases = result.test_cases;
+                        displayTestCases(result.test_cases);
+                        console.log('测试用例显示完成');
+                        
+                        // 更新步骤指示器
+                        document.getElementById('step2').classList.remove('active');
+                        document.getElementById('step3').classList.add('active');
+                        console.log('步骤指示器更新完成');
+                    } else {
+                        console.log('生成失败:', result.error);
+                        alert('生成失败：' + result.error);
+                    }
+                } catch (error) {
+                    if (error.name === 'AbortError') {
+                        console.log('请求已被取消');
+                    } else {
+                        alert('生成过程中出现错误：' + error.message);
+                    }
+                } finally {
+                    // 隐藏加载状态
+                    document.getElementById('generateLoading').style.display = 'none';
+                    document.getElementById('generateBtn').disabled = false;
+                    document.getElementById('cancelBtn').style.display = 'none';
+                    currentRequestController = null;
+                }
+            });
+
+            // 导出Excel
+            document.getElementById('exportBtn').addEventListener('click', async function() {
+                if (generatedTestCases.length === 0) {
+                    alert('没有测试用例可导出');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('test_cases_json', JSON.stringify(generatedTestCases));
+
+                try {
+                    // 显示加载状态
+                    document.getElementById('loadingOverlay').style.display = 'block';
+
+                    const response = await fetch('http://localhost:8000/export', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = '测试用例_' + new Date().toISOString().slice(0, 10) + '.xlsx';
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+                    } else {
+                        throw new Error('导出失败');
+                    }
+                } catch (error) {
+                    alert('导出过程中出现错误：' + error.message);
+                } finally {
+                    // 隐藏加载状态
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                }
+            });
+
+            // 绑定其他按钮事件
+            const proceedHandler = function() {
+                console.log('=== proceedToGenerate 按钮被点击 ===');
+                console.log('点击前的步骤状态:');
+                console.log('步骤1 - active:', document.getElementById('step1').classList.contains('custom-step-active'), 'completed:', document.getElementById('step1').classList.contains('custom-step-completed'));
+                console.log('步骤2 - active:', document.getElementById('step2').classList.contains('custom-step-active'));
+                
+                // 在步骤2显示需求摘要
+                const requirementSummary = document.getElementById('requirementSummary');
+                if (requirementSummary && currentRequirementText) {
+                    requirementSummary.textContent = currentRequirementText.length > 200 ? 
+                        currentRequirementText.substring(0, 200) + '...' : 
+                        currentRequirementText;
+                }
+                
+                // 传递步骤1的参数设置到步骤2
+                transferParametersToStep2();
+                
+                document.getElementById('inputSection').style.display = 'none';
+                document.getElementById('generateSection').style.display = 'block';
+                document.getElementById('step1').classList.remove('custom-step-active');
+                document.getElementById('step1').classList.add('custom-step-completed');
+                document.getElementById('step2').classList.add('custom-step-active');
+                
+                console.log('点击后的步骤状态:');
+                console.log('步骤1 - active:', document.getElementById('step1').classList.contains('custom-step-active'), 'completed:', document.getElementById('step1').classList.contains('custom-step-completed'));
+                console.log('步骤2 - active:', document.getElementById('step2').classList.contains('custom-step-active'));
+                
+                // 设置第二步的模型选择
+                const selectedModel = document.getElementById('modelSelect').value;
+                document.getElementById('modelSelectSecond').value = selectedModel;
+                
+                // 检查并显示第二步的API密钥状态
+                checkStepTwoApiKeyStatus();
+            };
+            
+            document.getElementById('proceedToGenerate').addEventListener('click', proceedHandler);
+            document.getElementById('proceedToGenerateDirect').addEventListener('click', proceedHandler);
+
+            // 绑定API密钥可见性切换按钮
+            document.getElementById('toggleApiKeyVisibility').addEventListener('click', toggleApiKeyVisibility);
+
+            document.getElementById('viewDetailsBtn').addEventListener('click', showTestCaseDetails);
+            document.getElementById('restartBtn').addEventListener('click', restartProcess);
+            document.getElementById('cancelBtn').addEventListener('click', cancelCurrentRequest);
+        });
+
+        // 显示预览
+        function showPreview(content) {
+            console.log('=== showPreview 被调用 ===');
+            console.log('content length:', content.length);
+            
+            // 确定当前活动的tab
+            const activeTabPane = document.querySelector('.tab-pane.active');
+            const isDirectInput = activeTabPane && activeTabPane.id === 'text';
+            
+            // 根据当前tab选择对应的预览区域元素
+            let previewElement, fullContentElement, popoverElement, previewSection, proceedBtn;
+            if (isDirectInput) {
+                previewElement = document.getElementById('requirementPreviewDirect');
+                fullContentElement = document.getElementById('fullContentBodyDirect');
+                popoverElement = document.getElementById('fullContentPopoverDirect');
+                previewSection = document.getElementById('previewSectionDirect');
+                proceedBtn = document.getElementById('proceedToGenerateDirect');
+            } else {
+                previewElement = document.getElementById('requirementPreview');
+                fullContentElement = document.getElementById('fullContentBody');
+                popoverElement = document.getElementById('fullContentPopover');
+                previewSection = document.getElementById('previewSection');
+                proceedBtn = document.getElementById('proceedToGenerate');
+            }
+            
+            // 显示预览内容（截断显示）
+            const previewText = content.length > 500 ? content.substring(0, 500) + '...' : content;
+            previewElement.textContent = previewText;
+            
+            // 存储完整内容
+            previewElement.dataset.fullContent = content;
+            
+            // 设置完整内容显示
+            fullContentElement.textContent = content;
+            
+            // 显示预览区域
+            previewSection.style.display = 'block';
+            
+            console.log('显示预览区域:', isDirectInput ? '直接输入模式' : '文件上传模式');
+            console.log('预览区域元素:', previewSection);
+            console.log('预览区域样式display:', previewSection.style.display);
+            
+            // 步骤状态管理
+            const step1 = document.getElementById('step1');
+            const step2 = document.getElementById('step2');
+            
+            console.log('步骤1状态 - active:', step1.classList.contains('custom-step-active'), 'completed:', step1.classList.contains('custom-step-completed'));
+            console.log('步骤2状态 - active:', step2.classList.contains('custom-step-active'));
+            
+            step1.classList.remove('custom-step-active');
+            step1.classList.add('custom-step-completed');
+            
+            // 不要立即激活步骤2，让用户先查看预览
+            console.log('步骤1状态更新后 - active:', step1.classList.contains('custom-step-active'), 'completed:', step1.classList.contains('custom-step-completed'));
+            console.log('步骤2状态更新后 - active:', step2.classList.contains('custom-step-active'));
+            
+            // 添加鼠标事件监听
+            addPreviewHoverEvents(previewElement, popoverElement);
+            
+            // 添加额外的调试信息
+            console.log('=== showPreview 执行完毕 ===');
+            console.log('当前步骤状态:');
+            console.log('步骤1 - active:', document.getElementById('step1').classList.contains('custom-step-active'), 'completed:', document.getElementById('step1').classList.contains('custom-step-completed'));
+            console.log('步骤2 - active:', document.getElementById('step2').classList.contains('custom-step-active'));
+            console.log('步骤3 - active:', document.getElementById('step3').classList.contains('custom-step-active'));
+            
+            // 设置一个延时检查，看看后续是否有代码修改了状态
+            setTimeout(() => {
+                console.log('=== 1秒后状态检查 ===');
+                console.log('步骤1 - active:', document.getElementById('step1').classList.contains('custom-step-active'), 'completed:', document.getElementById('step1').classList.contains('custom-step-completed'));
+                console.log('步骤2 - active:', document.getElementById('step2').classList.contains('custom-step-active'));
+                console.log('步骤3 - active:', document.getElementById('step3').classList.contains('custom-step-active'));
+                
+                // 检查预览区域是否仍然可见
+                const previewSec = document.getElementById('previewSection');
+                console.log('预览区域1秒后状态 - display:', previewSec.style.display);
+                console.log('预览区域1秒后computed display:', window.getComputedStyle(previewSec).display);
+            }, 1000);
+        }
+        
+        function addPreviewHoverEvents(previewElement, popoverElement) {
+            let hoverTimeout;
+            
+            previewElement.addEventListener('mouseenter', function(e) {
+                if (this.dataset.fullContent && this.dataset.fullContent.length > 500) {
+                    hoverTimeout = setTimeout(() => {
+                        const rect = this.getBoundingClientRect();
+                        popoverElement.style.display = 'block';
+                        popoverElement.style.left = rect.left + 'px';
+                        popoverElement.style.top = (rect.bottom + 10) + 'px';
+                    }, 500); // 500ms延迟显示
+                }
+            });
+            
+            previewElement.addEventListener('mouseleave', function() {
+                clearTimeout(hoverTimeout);
+                setTimeout(() => {
+                    popoverElement.style.display = 'none';
+                }, 100);
+            });
+            
+            popoverElement.addEventListener('mouseenter', function() {
+                this.style.display = 'block';
+            });
+            
+            popoverElement.addEventListener('mouseleave', function() {
+                this.style.display = 'none';
+            });
+        }
+
+        // 传递步骤1参数到步骤2
+        function transferParametersToStep2() {
+            console.log('=== 开始传递参数到步骤2 ===');
+            
+            // 获取步骤1中当前活动tab的参数
+            const activeTab = document.querySelector('.nav-link.active').getAttribute('data-bs-target');
+            console.log('当前活动tab:', activeTab);
+            
+            let normalCaseCount, abnormalCaseCount, selectedTestTypes;
+            
+            if (activeTab === '#file') {
+                // 文件上传tab
+                normalCaseCount = document.getElementById('normalCaseCountFile').value;
+                abnormalCaseCount = document.getElementById('abnormalCaseCountFile').value;
+                selectedTestTypes = [];
+                document.querySelectorAll('#file input[name="testTypesFile"]:checked').forEach(checkbox => {
+                    selectedTestTypes.push(checkbox.value);
+                });
+            } else {
+                // 直接输入tab (注意: tab的ID是#text，不是#direct)
+                normalCaseCount = document.getElementById('normalCaseCountDirect').value;
+                abnormalCaseCount = document.getElementById('abnormalCaseCountDirect').value;
+                selectedTestTypes = [];
+                document.querySelectorAll('#text input[name="testTypesDirect"]:checked').forEach(checkbox => {
+                    selectedTestTypes.push(checkbox.value);
+                });
+            }
+            
+            console.log('从步骤1获取的参数:', {
+                normal_case_count: normalCaseCount,
+                abnormal_case_count: abnormalCaseCount,
+                test_types: selectedTestTypes
+            });
+            
+            // 设置步骤2的参数
+            document.getElementById('normalCaseCount').value = normalCaseCount;
+            document.getElementById('abnormalCaseCount').value = abnormalCaseCount;
+            
+            // 设置测试类型选中状态
+            // 先清除所有选中状态
+            document.querySelectorAll('#generateSection input[name="testTypes"]').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            // 再设置选中状态
+            selectedTestTypes.forEach(type => {
+                const checkbox = document.querySelector(`#generateSection input[value="${type}"]`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+            });
+            
+            console.log('步骤2参数已设置完成');
+        }
+
+        // 获取优先级显示的badge HTML
+        function getPriorityBadge(priority) {
+            if (!priority) return '<span class="badge bg-secondary">-</span>';
+            
+            const p = String(priority).toLowerCase().trim();
+            
+            // P0/P1/P2 格式
+            if (p === 'p0' || p === '高' || p === 'high' || p === 'urgent' || p === '紧急') {
+                return '<span class="badge bg-danger">' + priority + '</span>';
+            }
+            if (p === 'p1' || p === '中' || p === 'medium' || p === 'normal') {
+                return '<span class="badge bg-warning">' + priority + '</span>';
+            }
+            if (p === 'p2' || p === '低' || p === 'low') {
+                return '<span class="badge bg-success">' + priority + '</span>';
+            }
+            
+            // 默认显示原始值
+            return '<span class="badge bg-info">' + priority + '</span>';
+        }
+
+        // 显示测试用例
+        function displayTestCases(testCases) {
+            console.log('=== 开始显示测试用例 ===');
+            console.log('接收到的测试用例:', testCases);
+            const tbody = document.getElementById('testCaseBody');
+            const countElement = document.getElementById('testCaseCount');
+            console.log('找到tbody元素:', !!tbody);
+            tbody.innerHTML = '';
+
+            // 更新测试用例计数
+            if (countElement) {
+                countElement.textContent = testCases.length;
+            }
+
+            testCases.forEach(testCase => {
+                const row = tbody.insertRow();
+                // 处理操作步骤，如果没有则显示"-"
+                const steps = testCase.steps || testCase.test_steps || '-';
+                row.innerHTML = `
+                    <td class="text-center"><span class="badge bg-secondary">${testCase.module || '-'}</span></td>
+                    <td class="text-center fw-bold">${testCase.case_id || '-'}</td>
+                    <td><strong>${testCase.case_name || '-'}</strong></td>
+                    <td class="text-center"><span class="badge bg-info">${testCase.case_type || '-'}</span></td>
+                    <td class="text-center">
+                        ${getPriorityBadge(testCase.priority)}
+                    </td>
+                    <td style="white-space: pre-wrap; max-width: 250px;">${steps}</td>
+                    <td style="white-space: pre-wrap; max-width: 300px;">${testCase.expected_result || '-'}</td>
+                `;
+            });
+
+            // 更新步骤指示器
+            document.getElementById('step2').classList.remove('custom-step-active');
+            document.getElementById('step3').classList.add('custom-step-active');
+            
+            document.getElementById('generateSection').style.display = 'none';
+            document.getElementById('resultSection').style.display = 'block';
+        }
+
+        // 查看详情
+        function showTestCaseDetails() {
+            if (generatedTestCases.length === 0) {
+                alert('没有测试用例可查看');
+                return;
+            }
+            
+            let details = '详细的测试用例信息：\n\n';
+            generatedTestCases.forEach((tc, index) => {
+                details += `${index + 1}. ${tc.case_name}\n`;
+                details += `   模块：${tc.module}\n`;
+                details += `   编号：${tc.case_id}\n`;
+                details += `   类型：${tc.case_type}\n`;
+                details += `   优先级：${tc.priority}\n`;
+                details += `   前置条件：${tc.precondition}\n`;
+                details += `   测试步骤：${tc.steps}\n`;
+                details += `   预期结果：${tc.expected_result}\n\n`;
+            });
+            
+            alert(details);
+        }
+
+        // 重新开始
+        function restartProcess() {
+            location.reload();
+        }
+
+        // 取消当前请求
+        function cancelCurrentRequest() {
+            if (currentRequestController) {
+                currentRequestController.abort();
+            }
+        }
+
+        // 显示加载
+        function showLoading() {
+            document.getElementById('loadingOverlay').style.display = 'block';
+        }
+
+        // 隐藏加载
+        function hideLoading() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+
+        // 全局配置存储
+        let modelConfigs = {};
+        
+        // 检查API密钥配置状态
+        async function checkApiKeyStatus() {
+            try {
+                const response = await fetch('http://localhost:8000/api/config/api-keys');
+                const keysStatus = await response.json();
+                modelConfigs = keysStatus;
+                
+                // 更新模型选择变化事件，显示对应的密钥状态和限制
+                document.getElementById('modelSelect').addEventListener('change', function() {
+                    const model = this.value;
+                    updateApiKeyDisplay(model, keysStatus);
+                    updateModelLimits(model, keysStatus);
+                });
+                
+                // 初始化显示当前选中模型的密钥状态和限制
+                const currentModel = document.getElementById('modelSelect').value;
+                updateApiKeyDisplay(currentModel, keysStatus);
+                updateModelLimits(currentModel, keysStatus);
+            } catch (error) {
+                console.log('检查API密钥状态失败:', error);
+            }
+        }
+        
+        // 更新模型限制参数
+        function updateModelLimits(model, keysStatus) {
+            if (model in keysStatus) {
+                const config = keysStatus[model];
+                const maxCases = config.max_cases_per_request || 25;
+                
+                // 更新所有用例数量输入框的最大值和提示
+                const inputs = [
+                    'normalCaseCountFile', 'abnormalCaseCountFile',
+                    'normalCaseCountDirect', 'abnormalCaseCountDirect',
+                    'normalCaseCount', 'abnormalCaseCount'
+                ];
+                
+                inputs.forEach(id => {
+                    const input = document.getElementById(id);
+                    if (input) {
+                        input.max = maxCases;
+                        const formText = input.nextElementSibling;
+                        if (formText && formText.classList.contains('form-text')) {
+                            const minVal = input.min || 0;
+                            formText.textContent = `建议范围：${minVal}-${maxCases}个（单次最高限制${maxCases}）`;
+                        }
+                    }
+                });
+                
+                console.log(`已更新模型 ${model} 的限制为 ${maxCases}`);
+            }
+        }
+
+        // 更新API密钥显示
+        function updateApiKeyDisplay(model, keysStatus) {
+            const apiKeyContainer = document.getElementById('apiKeyContainer');
+            const apiKeyStatus = document.getElementById('apiKeyStatus');
+            const maskedApiKey = document.getElementById('maskedApiKey');
+            
+            if (model in keysStatus && keysStatus[model].has_key) {
+                // 显示已配置状态
+                apiKeyStatus.style.display = 'block';
+                maskedApiKey.textContent = keysStatus[model].masked_key;
+                
+                // 如果输入框为空，填充掩码密钥作为提示
+                const apiKeyInput = document.getElementById('apiKey');
+                if (!apiKeyInput.value) {
+                    apiKeyInput.placeholder = '已配置密钥: ' + keysStatus[model].masked_key + ' (可修改)';
+                }
+            } else {
+                // 隐藏已配置状态
+                apiKeyStatus.style.display = 'none';
+                document.getElementById('apiKey').placeholder = '请输入API密钥';
+            }
+        }
+
+        // 切换API密钥可见性
+        function toggleApiKeyVisibility() {
+            const apiKeyInput = document.getElementById('apiKey');
+            const toggleButton = document.getElementById('toggleApiKeyVisibility');
+            const icon = toggleButton.querySelector('i');
+            
+            if (apiKeyInput.type === 'password') {
+                apiKeyInput.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                apiKeyInput.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
+        }
+
+        // 检查第二步的API密钥状态
+        async function checkStepTwoApiKeyStatus() {
+            try {
+                const response = await fetch('http://localhost:8000/api/config/api-keys');
+                const keysStatus = await response.json();
+                
+                const selectedModel = document.getElementById('modelSelectSecond').value;
+                const apiKeyContainer = document.getElementById('apiKeyContainer');
+                const apiKeyStatus = document.getElementById('apiKeyStatus');
+                const maskedApiKey = document.getElementById('maskedApiKey');
+                const apiKeyInput = document.getElementById('apiKey');
+                
+                if (selectedModel in keysStatus && keysStatus[selectedModel].has_key) {
+                    // 显示已配置状态
+                    apiKeyContainer.style.display = 'block';
+                    apiKeyStatus.style.display = 'block';
+                    maskedApiKey.textContent = keysStatus[selectedModel].masked_key;
+                    
+                    // 设置输入框提示
+                    if (!apiKeyInput.value) {
+                        apiKeyInput.placeholder = '已配置密钥: ' + keysStatus[selectedModel].masked_key + ' (可修改)';
+                    }
+                } else {
+                    // 根据模型类型决定是否显示输入框
+                    const modelSelectSecond = document.getElementById('modelSelectSecond');
+                    modelSelectSecond.addEventListener('change', function() {
+                        const model = this.value;
+                        const container = document.getElementById('apiKeyContainer');
+                        if (model === 'openai' || model === 'qwen') {
+                            container.style.display = 'block';
+                        } else {
+                            container.style.display = 'none';
+                        }
+                    });
+                }
+            } catch (error) {
+                console.log('检查第二步API密钥状态失败:', error);
+            }
+        }
+
+        console.log('=== 脚本初始化完成 ===');
+    </script>
+</body>
+</html>
