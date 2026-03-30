@@ -150,9 +150,17 @@
                     <div class="card-header bg-primary text-white">
                         <div class="d-flex justify-content-between align-items-center">
                             <h3 class="mb-0"><i class="fas fa-robot me-2"></i>AI测试用例生成工具</h3>
-                            <a href="/api_config.html" class="btn btn-sm btn-light">
-                                <i class="fas fa-key me-1"></i>API密钥管理
-                            </a>
+                            <div>
+                                <a href="/modules.html" class="btn btn-sm btn-light me-2">
+                                    <i class="fas fa-cubes me-1"></i>功能模块管理
+                                </a>
+                                <a href="/test_cases.html" class="btn btn-sm btn-light me-2">
+                                    <i class="fas fa-database me-1"></i>用例管理
+                                </a>
+                                <a href="/api_config.html" class="btn btn-sm btn-light">
+                                    <i class="fas fa-key me-1"></i>API密钥管理
+                                </a>
+                            </div>
                         </div>
                     </div>
                     <div class="card-body">
@@ -185,6 +193,15 @@
                                     <option value="openai">OpenAI (需API密钥)</option>
                                 </select>
                                 <div class="form-text">示例数据无需配置，可直接体验功能</div>
+                            </div>
+
+                            <!-- 功能模块选择 -->
+                            <div class="mb-4">
+                                <label class="form-label">功能模块：<span class="text-danger">*</span></label>
+                                <select id="moduleSelect" class="form-select" required>
+                                    <option value="">请选择功能模块</option>
+                                </select>
+                                <div class="form-text">请先选择功能模块，用例将归属于此模块</div>
                             </div>
 
                             <!-- 输入方式选择 -->
@@ -437,6 +454,12 @@
                                     <small class="text-muted">共 <span id="testCaseCount">0</span> 条测试用例</small>
                                 </div>
                                 <div class="d-flex gap-2">
+                                    <button id="saveToDbBtn" class="btn btn-primary btn-sm">
+                                        <i class="fas fa-database me-1"></i>保存到数据库
+                                    </button>
+                                    <button id="editCasesBtn" class="btn btn-warning btn-sm">
+                                        <i class="fas fa-edit me-1"></i>编辑用例
+                                    </button>
                                     <button id="exportBtn" class="btn btn-success btn-sm">
                                         <i class="fas fa-file-excel me-1"></i>导出Excel
                                     </button>
@@ -494,6 +517,7 @@
         console.log('=== 新版本脚本开始执行 ===');
         
         let currentRequirementText = '';
+        let currentRequirementId = '';
         let generatedTestCases = [];
         let currentRequestController = null;
 
@@ -530,6 +554,9 @@
             // 检查并显示已配置的API密钥状态
             checkApiKeyStatus();
             
+            // 加载功能模块列表
+            loadModules();
+            
             // Tab切换时隐藏非当前tab的预览区域
             document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(tab => {
                 tab.addEventListener('shown.bs.tab', function(e) {
@@ -553,6 +580,11 @@
             document.getElementById('uploadForm').addEventListener('submit', async function(e) {
                 e.preventDefault();
                 console.log('=== 文件上传表单提交 ===');
+                
+                // 验证功能模块选择
+                if (!validateModuleSelection()) {
+                    return;
+                }
                 
                 const fileInput = document.getElementById('requirementFile');
                 if (!fileInput.files.length) {
@@ -596,7 +628,7 @@
 
                 try {
                     showLoading();
-                    const response = await fetch('http://localhost:8000/upload', {
+                    const response = await fetch('http://localhost:8000/api/upload', {
                         method: 'POST',
                         body: formData
                     });
@@ -604,7 +636,26 @@
                     const result = await response.json();
                     
                     if (result.success) {
-                        currentRequirementText = result.content;
+                        currentRequirementText = result.full_content || result.content;
+                        
+                        // 创建需求记录
+                        const moduleId = getSelectedModuleId();
+                        const reqFormData = new FormData();
+                        reqFormData.append('source_type', 'file');
+                        reqFormData.append('content', currentRequirementText);
+                        reqFormData.append('module_id', moduleId);
+                        
+                        const reqResponse = await fetch('http://localhost:8000/api/requirements', {
+                            method: 'POST',
+                            body: reqFormData
+                        });
+                        
+                        const reqResult = await reqResponse.json();
+                        if (reqResult.success) {
+                            currentRequirementId = reqResult.id;
+                            console.log('需求已创建，ID:', currentRequirementId);
+                        }
+                        
                         showPreview(result.content);
                     } else {
                         alert('文件处理失败：' + result.error);
@@ -620,6 +671,11 @@
             document.getElementById('textInputForm').addEventListener('submit', async function(e) {
                 e.preventDefault();
                 console.log('=== 文本输入表单提交 ===');
+                
+                // 验证功能模块选择
+                if (!validateModuleSelection()) {
+                    return;
+                }
                 
                 const textContent = document.getElementById('requirementText').value.trim();
                 if (!textContent) {
@@ -655,7 +711,7 @@
 
                 try {
                     showLoading();
-                    const response = await fetch('http://localhost:8000/direct_input', {
+                    const response = await fetch('http://localhost:8000/api/direct_input', {
                         method: 'POST',
                         body: formData
                     });
@@ -664,6 +720,25 @@
                     
                     if (result.success) {
                         currentRequirementText = result.full_content;
+                        
+                        // 创建需求记录
+                        const moduleId = getSelectedModuleId();
+                        const reqFormData = new FormData();
+                        reqFormData.append('source_type', 'text');
+                        reqFormData.append('content', currentRequirementText);
+                        reqFormData.append('module_id', moduleId);
+                        
+                        const reqResponse = await fetch('http://localhost:8000/api/requirements', {
+                            method: 'POST',
+                            body: reqFormData
+                        });
+                        
+                        const reqResult = await reqResponse.json();
+                        if (reqResult.success) {
+                            currentRequirementId = reqResult.id;
+                            console.log('需求已创建，ID:', currentRequirementId);
+                        }
+                        
                         showPreview(result.content);
                     } else {
                         alert('文本处理失败：' + result.error);
@@ -700,7 +775,7 @@
                     const formData = new FormData();
                     formData.append('requirement_text', requirementText || currentRequirementText);
                     formData.append('api_key', apiKey);
-                    formData.append('model_type', modelType);
+                    formData.append('model', modelType);
                     
                     // 添加新参数
                     const normalCaseCount = document.getElementById('normalCaseCount').value || '3';
@@ -733,7 +808,7 @@
                     }
                     
                     const startTime = Date.now();
-                    const response = await fetch('http://localhost:8000/generate', {
+                    const response = await fetch('http://localhost:8000/api/generate', {
                         method: 'POST',
                         body: formData,
                         signal: signal
@@ -750,8 +825,18 @@
                     
                     if (result.success) {
                         console.log('准备显示测试用例，数量:', result.test_cases.length);
-                        generatedTestCases = result.test_cases;
-                        displayTestCases(result.test_cases);
+                        
+                        // 获取当前选中的模块名称
+                        const moduleSelect = document.getElementById('moduleSelect');
+                        const moduleName = moduleSelect.options[moduleSelect.selectedIndex].text;
+                        
+                        // 为每个用例添加模块名称
+                        generatedTestCases = result.test_cases.map(tc => ({
+                            ...tc,
+                            module: moduleName
+                        }));
+                        
+                        displayTestCases(generatedTestCases);
                         console.log('测试用例显示完成');
                         
                         // 更新步骤指示器
@@ -791,7 +876,7 @@
                     // 显示加载状态
                     document.getElementById('loadingOverlay').style.display = 'block';
 
-                    const response = await fetch('http://localhost:8000/export', {
+                    const response = await fetch('http://localhost:8000/api/export', {
                         method: 'POST',
                         body: formData
                     });
@@ -862,6 +947,12 @@
             document.getElementById('viewDetailsBtn').addEventListener('click', showTestCaseDetails);
             document.getElementById('restartBtn').addEventListener('click', restartProcess);
             document.getElementById('cancelBtn').addEventListener('click', cancelCurrentRequest);
+            
+            // 绑定保存到数据库按钮
+            document.getElementById('saveToDbBtn').addEventListener('click', saveToDatabase);
+            
+            // 绑定编辑用例按钮
+            document.getElementById('editCasesBtn').addEventListener('click', enableEditMode);
         });
 
         // 显示预览
@@ -1266,6 +1357,185 @@
         }
 
         console.log('=== 脚本初始化完成 ===');
+        
+        // ==================== 功能模块管理 ====================
+        
+        // 加载功能模块列表
+        async function loadModules() {
+            try {
+                const response = await fetch('http://localhost:8000/api/modules');
+                const data = await response.json();
+                
+                const select = document.getElementById('moduleSelect');
+                // 保留第一个选项
+                select.innerHTML = '<option value="">请选择功能模块</option>';
+                
+                data.items.forEach(module => {
+                    const option = document.createElement('option');
+                    option.value = module.id;
+                    option.textContent = module.name;
+                    select.appendChild(option);
+                });
+                
+                console.log(`已加载 ${data.items.length} 个功能模块`);
+            } catch (error) {
+                console.error('加载功能模块失败:', error);
+            }
+        }
+        
+        // 获取当前选中的功能模块ID
+        function getSelectedModuleId() {
+            return document.getElementById('moduleSelect').value;
+        }
+        
+        // 验证是否选择了功能模块
+        function validateModuleSelection() {
+            const moduleId = getSelectedModuleId();
+            if (!moduleId) {
+                alert('请先选择功能模块');
+                return false;
+            }
+            return true;
+        }
+        
+        // ==================== 用例管理功能 ====================
+        
+        // 保存到数据库
+        async function saveToDatabase() {
+            if (!generatedTestCases || generatedTestCases.length === 0) {
+                alert('没有测试用例可保存');
+                return;
+            }
+            
+            if (!currentRequirementId) {
+                alert('未找到关联的需求，请重新提交需求');
+                return;
+            }
+            
+            if (!confirm(`确定要保存 ${generatedTestCases.length} 条测试用例到数据库吗？`)) {
+                return;
+            }
+            
+            try {
+                showLoading();
+                
+                const formData = new FormData();
+                formData.append('cases', JSON.stringify(generatedTestCases));
+                formData.append('requirement_id', currentRequirementId);
+                formData.append('ai_model', document.getElementById('modelSelectSecond').value || 'qwen');
+                formData.append('is_edited', hasEditedCases ? 'true' : 'false');
+                
+                const response = await fetch('http://localhost:8000/api/test-cases/batch', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(result.message);
+                    hasEditedCases = false;  // 重置编辑标记
+                } else {
+                    alert('保存失败：' + result.error);
+                }
+            } catch (error) {
+                alert('保存过程中出现错误：' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        // 启用编辑模式
+        let isEditMode = false;
+        let hasEditedCases = false;  // 标记是否有用例被编辑过
+        function enableEditMode() {
+            if (!generatedTestCases || generatedTestCases.length === 0) {
+                alert('没有测试用例可编辑');
+                return;
+            }
+            
+            isEditMode = !isEditMode;
+            const btn = document.getElementById('editCasesBtn');
+            
+            if (isEditMode) {
+                btn.innerHTML = '<i class="fas fa-check me-1"></i>完成编辑';
+                btn.classList.remove('btn-warning');
+                btn.classList.add('btn-success');
+                renderEditableTable();
+            } else {
+                btn.innerHTML = '<i class="fas fa-edit me-1"></i>编辑用例';
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-warning');
+                // 保存修改后的数据
+                saveEditedCases();
+                renderNormalTable();
+            }
+        }
+        
+        // 渲染可编辑表格
+        function renderEditableTable() {
+            const tbody = document.getElementById('testCaseBody');
+            tbody.innerHTML = '';
+            
+            generatedTestCases.forEach((testCase, index) => {
+                const row = tbody.insertRow();
+                const steps = testCase.steps || testCase.test_steps || '-';
+                
+                row.innerHTML = `
+                    <td class="text-center"><input type="text" class="form-control form-control-sm" value="${testCase.module || ''}" data-field="module" data-index="${index}"></td>
+                    <td class="text-center fw-bold">${testCase.case_id || ''}</td>
+                    <td><input type="text" class="form-control form-control-sm" value="${testCase.case_name || ''}" data-field="case_name" data-index="${index}"></td>
+                    <td class="text-center">
+                        <select class="form-select form-select-sm" data-field="case_type" data-index="${index}">
+                            <option value="功能测试" ${testCase.case_type === '功能测试' ? 'selected' : ''}>功能测试</option>
+                            <option value="接口测试" ${testCase.case_type === '接口测试' ? 'selected' : ''}>接口测试</option>
+                            <option value="性能测试" ${testCase.case_type === '性能测试' ? 'selected' : ''}>性能测试</option>
+                        </select>
+                    </td>
+                    <td class="text-center">
+                        <select class="form-select form-select-sm" data-field="priority" data-index="${index}">
+                            <option value="P0" ${testCase.priority === 'P0' ? 'selected' : ''}>P0</option>
+                            <option value="P1" ${testCase.priority === 'P1' ? 'selected' : ''}>P1</option>
+                            <option value="P2" ${testCase.priority === 'P2' ? 'selected' : ''}>P2</option>
+                        </select>
+                    </td>
+                    <td><textarea class="form-control form-control-sm" rows="2" data-field="steps" data-index="${index}">${steps}</textarea></td>
+                    <td><textarea class="form-control form-control-sm" rows="2" data-field="expected_result" data-index="${index}">${testCase.expected_result || ''}</textarea></td>
+                `;
+            });
+        }
+        
+        // 保存编辑后的数据
+        function saveEditedCases() {
+            const inputs = document.querySelectorAll('#testCaseBody input, #testCaseBody select, #testCaseBody textarea');
+            
+            inputs.forEach(input => {
+                const field = input.dataset.field;
+                const index = parseInt(input.dataset.index);
+                
+                if (generatedTestCases[index] && field) {
+                    const oldValue = generatedTestCases[index][field] || '';
+                    const newValue = input.value || '';
+                    if (oldValue !== newValue) {
+                        generatedTestCases[index][field] = newValue;
+                        hasEditedCases = true;  // 标记有字段被修改
+                        
+                        // 记录原始值用于后续对比
+                        if (!generatedTestCases[index]['_original_values']) {
+                            generatedTestCases[index]['_original_values'] = {};
+                        }
+                        if (!generatedTestCases[index]['_original_values'][field]) {
+                            generatedTestCases[index]['_original_values'][field] = oldValue;
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 渲染普通表格
+        function renderNormalTable() {
+            displayTestCases(generatedTestCases);
+        }
     </script>
 </body>
 </html>
