@@ -70,7 +70,8 @@ def _generate_example_cases(requirement_text: str, normal_count: int, abnormal_c
                 "steps": f"1. 进入功能页面\n2. 执行正常操作步骤{i+1}\n3. 验证结果",
                 "expected_result": "操作成功，显示正确结果",
                 "priority": "P1",
-                "case_type": test_type
+                "case_type": test_type,
+                "status": "pending"  # 默认为待执行
             })
             case_id += 1
         
@@ -84,7 +85,8 @@ def _generate_example_cases(requirement_text: str, normal_count: int, abnormal_c
                 "steps": f"1. 进入功能页面\n2. 执行异常操作步骤{i+1}\n3. 验证错误处理",
                 "expected_result": "系统正确处理异常，显示友好错误提示",
                 "priority": "P2",
-                "case_type": test_type
+                "case_type": test_type,
+                "status": "pending"  # 默认为待执行
             })
             case_id += 1
     

@@ -13,6 +13,74 @@
         .priority-P0 { background-color: #dc3545; color: white; }
         .priority-P1 { background-color: #ffc107; color: black; }
         .priority-P2 { background-color: #28a745; color: white; }
+        
+        /* Toast 提示样式 */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+        .toast-custom {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 12px 20px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 200px;
+            animation: slideIn 0.3s ease;
+        }
+        .toast-custom.success { border-left: 4px solid #28a745; }
+        .toast-custom.error { border-left: 4px solid #dc3545; }
+        .toast-custom.warning { border-left: 4px solid #ffc107; }
+        .toast-custom.info { border-left: 4px solid #17a2b8; }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+        .toast-custom.hiding {
+            animation: fadeOut 0.3s ease forwards;
+        }
+        
+        /* 确认弹窗样式 */
+        .confirm-modal .modal-content {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        .confirm-modal .modal-header {
+            border-bottom: none;
+            padding: 20px 20px 10px;
+        }
+        .confirm-modal .modal-body {
+            padding: 10px 20px 20px;
+        }
+        .confirm-modal .modal-footer {
+            border-top: none;
+            padding: 0 20px 20px;
+            justify-content: center;
+            gap: 10px;
+        }
+        .confirm-modal .icon-circle {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            font-size: 24px;
+        }
+        .confirm-modal.danger .icon-circle { background: #fee2e2; color: #dc3545; }
+        .confirm-modal.warning .icon-circle { background: #fef3c7; color: #f59e0b; }
+        .confirm-modal.info .icon-circle { background: #dbeafe; color: #3b82f6; }
     </style>
 </head>
 <body>
@@ -36,19 +104,19 @@
                     </div>
                     <div class="card-body">
                         <!-- 筛选区域 -->
-                        <div class="row mb-3">
+                        <div class="row mb-3 g-2">
                             <div class="col-md-2">
-                                <select id="filterModule" class="form-select">
+                                <select id="filterModule" class="form-select form-select-sm">
                                     <option value="">所有模块</option>
                                 </select>
                             </div>
                             <div class="col-md-2">
-                                <select id="filterRequirement" class="form-select">
+                                <select id="filterRequirement" class="form-select form-select-sm">
                                     <option value="">所有需求</option>
                                 </select>
                             </div>
                             <div class="col-md-2">
-                                <select id="filterType" class="form-select">
+                                <select id="filterType" class="form-select form-select-sm">
                                     <option value="">所有类型</option>
                                     <option value="功能测试">功能测试</option>
                                     <option value="接口测试">接口测试</option>
@@ -56,7 +124,7 @@
                                 </select>
                             </div>
                             <div class="col-md-2">
-                                <select id="filterPriority" class="form-select">
+                                <select id="filterPriority" class="form-select form-select-sm">
                                     <option value="">所有优先级</option>
                                     <option value="P0">P0</option>
                                     <option value="P1">P1</option>
@@ -64,19 +132,23 @@
                                 </select>
                             </div>
                             <div class="col-md-2">
-                                <select id="filterStatus" class="form-select">
+                                <select id="filterStatus" class="form-select form-select-sm">
                                     <option value="">所有状态</option>
-                                    <option value="draft">草稿</option>
-                                    <option value="approved">已审核</option>
+                                    <option value="pending">待执行</option>
+                                    <option value="passed">执行通过</option>
+                                    <option value="failed">执行异常</option>
                                     <option value="deprecated">已废弃</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
-                                <button id="searchBtn" class="btn btn-primary">
+                            <div class="col-md-4">
+                                <button id="searchBtn" class="btn btn-primary btn-sm me-1">
                                     <i class="fas fa-search me-1"></i>搜索
                                 </button>
-                                <button id="resetBtn" class="btn btn-secondary">
+                                <button id="resetBtn" class="btn btn-secondary btn-sm me-1">
                                     <i class="fas fa-undo me-1"></i>重置
+                                </button>
+                                <button id="batchDeleteBtn" class="btn btn-danger btn-sm">
+                                    <i class="fas fa-trash-alt me-1"></i>批量删除
                                 </button>
                             </div>
                         </div>
@@ -91,6 +163,7 @@
                             <table class="table table-hover table-sm" style="font-size: 0.85rem;">
                                 <thead class="table-light">
                                     <tr>
+                                        <th style="width: 40px;"><input type="checkbox" id="selectAll"></th>
                                         <th style="width: 80px;">编号</th>
                                         <th style="width: 100px;">模块</th>
                                         <th style="width: 150px;">用例名称</th>
@@ -167,8 +240,9 @@
                         <div class="col-md-4 mb-3">
                             <label class="form-label">状态</label>
                             <select class="form-select" id="editStatus">
-                                <option value="draft">草稿</option>
-                                <option value="approved">已审核</option>
+                                <option value="pending">待执行</option>
+                                <option value="passed">执行通过</option>
+                                <option value="failed">执行异常</option>
                                 <option value="deprecated">已废弃</option>
                             </select>
                         </div>
@@ -202,6 +276,81 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // ==================== 弹窗工具函数 ====================
+        
+        /**
+         * 显示 Toast 提示（自动消失）
+         * @param {string} message 提示内容
+         * @param {string} type 类型: success/error/warning/info
+         * @param {number} duration 显示时长(毫秒)，默认3000
+         */
+        function showToast(message, type = 'success', duration = 3000) {
+            const container = document.getElementById('toastContainer');
+            const icons = {
+                success: 'fa-check-circle',
+                error: 'fa-times-circle',
+                warning: 'fa-exclamation-circle',
+                info: 'fa-info-circle'
+            };
+            
+            const toast = document.createElement('div');
+            toast.className = `toast-custom ${type}`;
+            toast.innerHTML = `
+                <i class="fas ${icons[type]} text-${type === 'warning' ? 'warning' : type === 'info' ? 'info' : type}"></i>
+                <span>${message}</span>
+            `;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.add('hiding');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
+        
+        /**
+         * 显示确认弹窗
+         * @param {Object} options 配置项
+         * @param {string} options.title 标题
+         * @param {string} options.message 内容
+         * @param {string} options.type 类型: danger/warning/info
+         * @param {string} options.confirmText 确认按钮文字
+         * @param {Function} options.onConfirm 确认回调
+         */
+        function showConfirm(options) {
+            const modal = document.getElementById('confirmModal');
+            const modalInstance = new bootstrap.Modal(modal);
+            
+            // 设置内容
+            document.getElementById('confirmTitle').textContent = options.title || '确认操作';
+            document.getElementById('confirmMessage').textContent = options.message || '确定要执行此操作吗？';
+            document.getElementById('confirmBtn').textContent = options.confirmText || '确定';
+            
+            // 设置样式
+            modal.className = `modal fade confirm-modal ${options.type || 'warning'}`;
+            const icons = {
+                danger: 'fa-trash-alt',
+                warning: 'fa-exclamation-triangle',
+                info: 'fa-question-circle'
+            };
+            document.getElementById('confirmIcon').innerHTML = `<i class="fas ${icons[options.type] || icons.warning}"></i>`;
+            
+            // 绑定确认按钮
+            const confirmBtn = document.getElementById('confirmBtn');
+            const newConfirmBtn = confirmBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+            
+            newConfirmBtn.className = `btn btn-${options.type === 'danger' ? 'danger' : options.type === 'info' ? 'primary' : 'warning'}`;
+            newConfirmBtn.addEventListener('click', () => {
+                modalInstance.hide();
+                if (options.onConfirm) options.onConfirm();
+            });
+            
+            modalInstance.show();
+        }
+        
+        // ==================== 页面逻辑 ====================
+        
         let currentPage = 0;
         const pageSize = 10;
         let totalCases = 0;
@@ -231,6 +380,9 @@
             
             // 绑定保存编辑按钮
             document.getElementById('saveEditBtn').addEventListener('click', saveEditedCase);
+            
+            // 绑定批量删除按钮
+            document.getElementById('batchDeleteBtn').addEventListener('click', batchDeleteCases);
         });
         
         // 加载模块列表
@@ -310,7 +462,7 @@
                 renderPagination();
             } catch (error) {
                 console.error('加载测试用例失败:', error);
-                alert('加载失败：' + error.message);
+                showToast('加载失败：' + error.message, 'error');
             }
         }
         
@@ -330,8 +482,9 @@
                 const expected = c.expected_result ? c.expected_result.substring(0, 100) + (c.expected_result.length > 100 ? '...' : '') : '-';
                 const editedBadge = c.is_edited === 'true' 
                     ? '<span class="badge bg-warning" title="' + (c.edit_reason || '人工修订') + '">已修订</span>' 
-                    : '<span class="badge bg-light text-dark">AI生成</span>';
+                    : '<span class="badge bg-light text-dark">AI 生成</span>';
                 row.innerHTML = `
+                    <td><input type="checkbox" class="case-checkbox" value="${c.id}"></td>
                     <td>${c.case_id}</td>
                     <td><span class="badge bg-secondary">${c.module_name || '-'}</span></td>
                     <td>${c.case_name}</td>
@@ -356,8 +509,9 @@
         // 获取状态标签
         function getStatusBadge(status) {
             const map = {
-                'draft': '<span class="badge bg-warning">草稿</span>',
-                'approved': '<span class="badge bg-success">已审核</span>',
+                'pending': '<span class="badge bg-info">待执行</span>',
+                'passed': '<span class="badge bg-success">执行通过</span>',
+                'failed': '<span class="badge bg-danger">执行异常</span>',
                 'deprecated': '<span class="badge bg-secondary">已废弃</span>'
             };
             return map[status] || status;
@@ -497,7 +651,7 @@
                 const modal = new bootstrap.Modal(document.getElementById('editModal'));
                 modal.show();
             } catch (error) {
-                alert('加载用例详情失败：' + error.message);
+                showToast('加载用例详情失败：' + error.message, 'error');
             }
         }
         
@@ -527,38 +681,114 @@
                 if (result.success) {
                     bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
                     loadTestCases();
-                    alert('保存成功');
+                    showToast('保存成功', 'success');
                 } else {
-                    alert('保存失败：' + result.error);
+                    showToast('保存失败：' + result.error, 'error');
                 }
             } catch (error) {
-                alert('保存失败：' + error.message);
+                showToast('保存失败：' + error.message, 'error');
             }
         }
         
         // 删除用例
         async function deleteCase(id) {
-            if (!confirm('确定要删除这条测试用例吗？')) {
+            showConfirm({
+                title: '删除确认',
+                message: '确定要删除这条测试用例吗？删除后无法恢复。',
+                type: 'danger',
+                confirmText: '删除',
+                onConfirm: async () => {
+                    try {
+                        const response = await fetch(`http://localhost:8000/api/test-cases/${id}`, {
+                            method: 'DELETE'
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            loadTestCases();
+                            showToast('删除成功', 'success');
+                        } else {
+                            showToast('删除失败：' + result.error, 'error');
+                        }
+                    } catch (error) {
+                        showToast('删除失败：' + error.message, 'error');
+                    }
+                }
+            });
+        }
+        
+        // 批量删除用例
+        async function batchDeleteCases() {
+            const checkboxes = document.querySelectorAll('.case-checkbox:checked');
+            if (checkboxes.length === 0) {
+                showToast('请至少选择一个用例', 'warning');
                 return;
             }
             
-            try {
-                const response = await fetch(`http://localhost:8000/api/test-cases/${id}`, {
-                    method: 'DELETE'
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    loadTestCases();
-                    alert('删除成功');
-                } else {
-                    alert('删除失败：' + result.error);
+            showConfirm({
+                title: '批量删除确认',
+                message: `确定要删除选中的 ${checkboxes.length} 条测试用例吗？删除后无法恢复。`,
+                type: 'danger',
+                confirmText: '删除',
+                onConfirm: async () => {
+                    const ids = Array.from(checkboxes).map(cb => cb.value);
+                    
+                    try {
+                        const response = await fetch('http://localhost:8000/api/test-cases/batch-delete', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ ids: ids })
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            loadTestCases();
+                            showToast(`成功删除 ${result.deleted_count || ids.length} 条用例`, 'success');
+                        } else {
+                            showToast('批量删除失败：' + result.error, 'error');
+                        }
+                    } catch (error) {
+                        showToast('批量删除失败：' + error.message, 'error');
+                    }
                 }
-            } catch (error) {
-                alert('删除失败：' + error.message);
-            }
+            });
         }
+        
+        // 全选/取消全选
+        document.getElementById('selectAll').addEventListener('change', function(e) {
+            const checkboxes = document.querySelectorAll('.case-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = e.target.checked;
+            });
+        });
     </script>
+    
+    <!-- Toast 容器 -->
+    <div class="toast-container" id="toastContainer"></div>
+    
+    <!-- 确认弹窗 -->
+    <div class="modal fade confirm-modal" id="confirmModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="icon-circle" id="confirmIcon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                </div>
+                <div class="modal-body text-center">
+                    <h5 class="mb-2" id="confirmTitle">确认操作</h5>
+                    <p class="text-muted mb-0" id="confirmMessage">确定要执行此操作吗？</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="confirmBtn">确定</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

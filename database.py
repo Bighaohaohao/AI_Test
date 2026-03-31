@@ -105,7 +105,7 @@ class TestCase(Base):
     quality_score = Column(Integer, nullable=True)  # 1-5分
     
     # 状态
-    status = Column(String(20), nullable=False, default="draft")  # draft/approved/deprecated
+    status = Column(String(20), nullable=False, default="pending")  # pending/passed/failed/deprecated
     
     # 创建和更新信息
     created_by = Column(String(100), nullable=True)

@@ -58,7 +58,7 @@ async def save_test_cases(
                 case_type=ensure_string(case_data.get('case_type', '功能测试')),
                 source='ai',
                 ai_model=ai_model,
-                status='draft',
+                status=ensure_string(case_data.get('status', 'pending')),  # 使用传入的 status，默认为 pending
                 # 如果在生成页面编辑过，标记为人工修订
                 is_edited='true' if (is_edited == 'true' and edited_fields) else 'false',
                 edited_fields=edited_fields_str,
@@ -102,9 +102,10 @@ async def get_test_cases(
     if status:
         query = query.filter(TestCase.status == status)
     
-    total = query.count()
-    # 按自增ID降序排序，确保分页稳定
-    cases = query.order_by(TestCase.auto_id.desc()).offset(skip).limit(limit).all()
+    # 使用 distinct 避免重复计数
+    total = query.distinct().count()
+    # 按自增 ID 升序排序，使用 distinct 避免重复数据
+    cases = query.order_by(TestCase.auto_id.asc()).offset(skip).limit(limit).distinct().all()
     
     return {
         "total": total,
@@ -219,16 +220,30 @@ async def update_test_case(
     if status and status != case.status:
         case.status = status
     
-    # 标记人工修订（仅当核心字段被修改时）
-    if is_edited == "true" or edited_fields:
+    # 标记人工修订（仅当非状态字段被修改时）
+    if edited_fields:
         case.is_edited = "true"
-        case.edited_fields = json.dumps(edited_fields) if edited_fields else case.edited_fields
-        case.original_values = json.dumps(original_values) if original_values else case.original_values
-        if edit_reason:
-            case.edit_reason = edit_reason
+        case.edited_fields = json.dumps(edited_fields)
+        case.original_values = json.dumps(original_values)
+        case.edit_reason = edit_reason or '人工修订'
     
     db.commit()
     return {"success": True, "message": "用例已更新", "edited_fields": edited_fields}
+
+
+@router.post("/batch-delete")
+async def batch_delete_test_cases(request: dict, db: Session = Depends(get_db)):
+    """批量删除测试用例"""
+    from pydantic import BaseModel
+    
+    ids = request.get('ids', [])
+    if not ids:
+        raise HTTPException(status_code=400, detail="未提供要删除的 ID")
+    
+    deleted_count = db.query(TestCase).filter(TestCase.id.in_(ids)).delete(synchronize_session=False)
+    db.commit()
+    
+    return {"success": True, "deleted_count": deleted_count}
 
 
 @router.delete("/{case_id}")
